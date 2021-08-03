@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/fatih/structs"
 	"github.com/hashicorp/terraform/helper/schema"
 
 	"github.com/OpenNebula/one/src/oca/go/src/goca"
@@ -181,65 +180,7 @@ func resourceOpennebulaVirtualNetwork() *schema.Resource {
 				Description:   "List of Address Ranges to be part of the Virtual Network",
 				ConflictsWith: []string{"reservation_vnet", "reservation_size"},
 				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"ar_type": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Default:     "IP4",
-							Description: "Type of the Address Range: IP4, IP6. Default is 'IP4'",
-							ValidateFunc: func(v interface{}, k string) (ws []string, errors []error) {
-								validtypes := []string{"IP4", "IP6", "IP6_STATIC", "IP4_6", "IP4_6_STATIC", "ETHER"}
-								value := v.(string)
-
-								if inArray(value, validtypes) < 0 {
-									errors = append(errors, fmt.Errorf("Address Range type %q must be one of: %s", k, strings.Join(validtypes, ",")))
-								}
-
-								return
-							},
-						},
-						"ip4": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Computed:    true,
-							Description: "Start IPv4 of the range to be allocated (Required if IP4 or IP4_6).",
-						},
-						"size": {
-							Type:        schema.TypeInt,
-							Required:    true,
-							Description: "Size (in number) of the ip range",
-						},
-						"ip6": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Computed:    true,
-							Description: "Start IPv6 of the range to be allocated (Required if IP6_STATIC or IP4_6_STATIC)",
-						},
-						"mac": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Computed:    true,
-							Description: "Start MAC of the range to be allocated",
-						},
-						"global_prefix": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Computed:    true,
-							Description: "Global prefix for IP6 or IP4_6",
-						},
-						"ula_prefix": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Computed:    true,
-							Description: "ULA prefix for IP6 or IP4_6",
-						},
-						"prefix_length": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Computed:    true,
-							Description: "Prefix lenght Only needed for IP6_STATIC or IP4_6_STATIC",
-						},
-					},
+					Schema: ARFields(),
 				},
 			},
 			"hold_ips": {
@@ -296,6 +237,71 @@ func resourceOpennebulaVirtualNetwork() *schema.Resource {
 				Description: "Name of the Group that onws the Virtual Network, If empty, it uses caller group",
 			},
 			"tags": tagsSchema(),
+		},
+	}
+}
+
+func ARFields() map[string]*schema.Schema {
+	return map[string]*schema.Schema{
+		"id": {
+			Type:     schema.TypeString,
+			Computed: true,
+		},
+		"ar_type": {
+			Type:        schema.TypeString,
+			Optional:    true,
+			Default:     "IP4",
+			Description: "Type of the Address Range: IP4, IP6. Default is 'IP4'",
+			ValidateFunc: func(v interface{}, k string) (ws []string, errors []error) {
+				validtypes := []string{"IP4", "IP6", "IP6_STATIC", "IP4_6", "IP4_6_STATIC", "ETHER"}
+				value := v.(string)
+
+				if inArray(value, validtypes) < 0 {
+					errors = append(errors, fmt.Errorf("Address Range type %q must be one of: %s", k, strings.Join(validtypes, ",")))
+				}
+
+				return
+			},
+		},
+		"ip4": {
+			Type:        schema.TypeString,
+			Optional:    true,
+			Description: "Start IPv4 of the range to be allocated (Required if IP4 or IP4_6).",
+		},
+		"size": {
+			Type:        schema.TypeInt,
+			Required:    true,
+			Description: "Size (in number) of the ip range",
+		},
+		"ip6": {
+			Type:        schema.TypeString,
+			Optional:    true,
+			Computed:    true,
+			Description: "Start IPv6 of the range to be allocated (Required if IP6_STATIC or IP4_6_STATIC)",
+		},
+		"mac": {
+			Type:        schema.TypeString,
+			Optional:    true,
+			Computed:    true,
+			Description: "Start MAC of the range to be allocated",
+		},
+		"global_prefix": {
+			Type:        schema.TypeString,
+			Optional:    true,
+			Computed:    true,
+			Description: "Global prefix for IP6 or IP4_6",
+		},
+		"ula_prefix": {
+			Type:        schema.TypeString,
+			Optional:    true,
+			Computed:    true,
+			Description: "ULA prefix for IP6 or IP4_6",
+		},
+		"prefix_length": {
+			Type:        schema.TypeString,
+			Optional:    true,
+			Computed:    true,
+			Description: "Prefix lenght Only needed for IP6_STATIC or IP4_6_STATIC",
 		},
 	}
 }
@@ -431,9 +437,9 @@ func resourceOpennebulaVirtualNetworkCreate(d *schema.ResourceData, meta interfa
 		// Address Ranges
 		ars := d.Get("ar").([]interface{})
 
-		for i, arinterface := range ars {
+		for _, arinterface := range ars {
 			armap := arinterface.(map[string]interface{})
-			arstr := generateAR(armap, i)
+			arstr := generateAR(armap).String()
 			err := vnc.AddAR(arstr)
 			if err != nil {
 				return fmt.Errorf("Error: %s\nAR: %s", err, arstr)
@@ -505,7 +511,7 @@ func resourceOpennebulaVirtualNetworkCreate(d *schema.ResourceData, meta interfa
 	return resourceOpennebulaVirtualNetworkRead(d, meta)
 }
 
-func generateAR(armap map[string]interface{}, id int) string {
+func generateAR(armap map[string]interface{}) *vn.AddressRange {
 
 	ar := vn.NewAddressRange()
 
@@ -518,9 +524,7 @@ func generateAR(armap map[string]interface{}, id int) string {
 	argprefix := armap["global_prefix"].(string)
 	arulaprefix := armap["ula_prefix"].(string)
 	arprefixlength := armap["prefix_length"].(string)
-	arid := strconv.Itoa(id)
 
-	ar.Add(vnk.ARID, arid)
 	ar.Add(vnk.Size, fmt.Sprint(arsize))
 	ar.Add(vnk.Type, artype)
 
@@ -566,7 +570,7 @@ func generateAR(armap map[string]interface{}, id int) string {
 		ar.Add(vnk.PrefixLength, arprefixlength)
 	}
 
-	return ar.String()
+	return ar
 }
 
 func generateVnTemplate(d *schema.ResourceData) (string, error) {
@@ -719,9 +723,11 @@ func resourceOpennebulaVirtualNetworkRead(d *schema.ResourceData, meta interface
 		return err
 	}
 
-	if err := d.Set("ar", generateARMapFromStructs(vn.ARs)); err != nil {
+	ARList := generateARMapFromStructs(vn.ARs)
+	if err := d.Set("ar", ARList); err != nil {
 		log.Printf("[WARN] Error setting ar for Virtual Network %x, error: %s", vn.ID, err)
 	}
+
 	return nil
 }
 
@@ -801,15 +807,26 @@ func flattenVnetTemplate(d *schema.ResourceData, vnTpl *vn.Template) error {
 	return nil
 }
 
-func generateARMapFromStructs(slice []vn.AR) []map[string]interface{} {
+func generateARMapFromStructs(ARs []vn.AR) []map[string]interface{} {
 
-	armap := make([]map[string]interface{}, 0)
+	ARMaps := make([]map[string]interface{}, 0, len(ARs))
 
-	for i := 0; i < len(slice); i++ {
-		armap = append(armap, structs.Map(slice[i]))
+	for _, AR := range ARs {
+		ARMap := map[string]interface{}{
+			"id":            AR.ID,
+			"ar_type":       AR.Type,
+			"ip4":           AR.IP,
+			"ip6":           AR.IP6,
+			"mac":           AR.MAC,
+			"size":          AR.Size,
+			"global_prefix": AR.GlobalPrefix,
+			"ula_prefix":    AR.ULAPrefix,
+			//"prefix_length": AR.PrefixLength
+		}
+		ARMaps = append(ARMaps, ARMap)
 	}
 
-	return armap
+	return ARMaps
 }
 
 func resourceOpennebulaVirtualNetworkExists(d *schema.ResourceData, meta interface{}) (bool, error) {
@@ -927,31 +944,65 @@ func resourceOpennebulaVirtualNetworkUpdate(d *schema.ResourceData, meta interfa
 	}
 
 	if d.HasChange("ar") {
-		_, narsset := d.GetChange("ar")
 
-		nars := narsset.([]interface{})
-		vnars := vn.ARs
+		old, new := d.GetChange("ar")
+		existingARsCfg := old.([]interface{})
+		newARsCfg := new.([]interface{})
 
-		// Delete Old ARs
-		for _, vnar := range vnars {
-			arid, err := strconv.Atoi(vnar.ID)
-			if err != nil {
-				return err
+		ARToRem, ARToAdd := diffListConfig(newARsCfg, existingARsCfg,
+			&schema.Resource{
+				Schema: ARFields(),
+			},
+			"ar_type",
+			"ip4",
+			"size",
+			"ip6",
+			"global_prefix",
+			"ula_prefix",
+			"prefix_length",
+		)
+
+		// reorder arToAdd list according to new list order
+		newARToAdd := make([]interface{}, len(ARToAdd))
+
+		i := 0
+		for _, newARIf := range newARsCfg {
+			newAR := newARIf.(map[string]interface{})
+
+			for _, ARToAddIf := range ARToAdd {
+				AR := ARToAddIf.(map[string]interface{})
+
+				if (AR["ip4"] == newAR["ip4"] || AR["ip6"] == newAR["ip6"]) && AR["size"] == newAR["size"] {
+					newARToAdd[i] = AR
+					i++
+				}
 			}
-			err = vnc.RmAR(arid)
+		}
+
+		// remove ARs
+		for _, ARIf := range ARToRem {
+			ARConfig := ARIf.(map[string]interface{})
+
+			ARID, err := strconv.ParseInt(ARConfig["id"].(string), 10, 0)
+			if err != nil {
+				return fmt.Errorf("Can't convert id to integer: %s\n", ARConfig["id"].(string))
+			}
+
+			err = vnc.RmAR(int(ARID))
 			if err != nil {
 				return err
 			}
 		}
 
-		// Add All ARs
-		for i, ar := range nars {
-			armap := ar.(map[string]interface{})
+		// Add new ARs
+		for _, ARIf := range newARToAdd {
+			ARConfig := ARIf.(map[string]interface{})
 
-			arstr := generateAR(armap, i)
-			err := vnc.AddAR(arstr)
+			ARTemplateStr := generateAR(ARConfig).String()
+
+			err = vnc.AddAR(ARTemplateStr)
 			if err != nil {
-				return fmt.Errorf("Error: %s\nAR: %s", err, arstr)
+				return err
 			}
 		}
 
