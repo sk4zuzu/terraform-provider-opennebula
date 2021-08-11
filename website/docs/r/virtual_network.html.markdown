@@ -92,7 +92,7 @@ The following arguments are supported:
 * `ar_type` - (Optional) Address range type. Supported values: `IP4`, `IP6`, `IP6_STATIC`, `IP4_6` or `IP4_6_STATIC` or `ETHER`. Defaults to `IP4`.
 * `ip4` - (Optional) Starting IPv4 address of the range. Required if `ar_type` is `IP4` or `IP4_6`.
 * `ip6` - (Optional) Starting IPv6 address of the range. Required if `ar_type` is `IP6_STATIC` or `IP4_6_STATIC`.
-* `size - (Optional) Address range size.
+* `size` - (Required) Address range size.
 * `mac` - (Optional) Starting MAC Address of the range.
 * `global_prefix` - (Optional) Global prefix for `IP6` or `IP_4_6`.
 * `ula_prefix` - (Optional) ULA prefix for `IP6` or `IP_4_6`.
