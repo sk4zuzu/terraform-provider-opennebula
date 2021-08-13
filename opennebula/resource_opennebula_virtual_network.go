@@ -300,7 +300,6 @@ func ARFields() map[string]*schema.Schema {
 		"prefix_length": {
 			Type:        schema.TypeString,
 			Optional:    true,
-			Computed:    true,
 			Description: "Prefix lenght Only needed for IP6_STATIC or IP4_6_STATIC",
 		},
 	}
@@ -821,7 +820,6 @@ func generateARMapFromStructs(ARs []vn.AR) []map[string]interface{} {
 			"size":          AR.Size,
 			"global_prefix": AR.GlobalPrefix,
 			"ula_prefix":    AR.ULAPrefix,
-			//"prefix_length": AR.PrefixLength
 		}
 		ARMaps = append(ARMaps, ARMap)
 	}
