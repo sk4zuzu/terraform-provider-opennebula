@@ -247,6 +247,13 @@ func resourceOpennebulaVirtualNetwork() *schema.Resource {
 				Description:   "Address Range ID to be used for the reservation",
 				ConflictsWith: []string{"bridge", "physical_device", "ar", "hold_ips", "type", "vlan_id", "automatic_vlan_id", "mtu", "dns", "gateway", "network_mask"},
 			},
+			"reservation_auto_gw": {
+				Type:          schema.TypeBool,
+				Optional:      true,
+				Default:       false,
+				Description:   "Set the GW to the first IP from the AR",
+				ConflictsWith: []string{"bridge", "physical_device", "ar", "hold_ips", "type", "vlan_id", "automatic_vlan_id", "mtu", "dns", "gateway", "network_mask"},
+			},
 			"security_groups": {
 				Type:        schema.TypeSet,
 				Optional:    true,
@@ -462,6 +469,20 @@ func resourceOpennebulaVirtualNetworkCreate(ctx context.Context, d *schema.Resou
 				Detail:   fmt.Sprintf("virtual network (ID: %s): %s", d.Id(), err),
 			})
 			return diags
+		}
+
+		reservationAutoGW, ok := d.GetOk("reservation_auto_gw")
+		if ok && reservationAutoGW.(bool) {
+			update := fmt.Sprintf("GATEWAY=\"%s\"", vnet.ARs[0].IP)
+			err = vnc.Update(update, parameters.Merge)
+			if err != nil {
+				diags = append(diags, diag.Diagnostic{
+					Severity: diag.Error,
+					Summary:  "Failed to alter gateway",
+					Detail:   fmt.Sprintf("virtual network (ID: %s): %s", d.Id(), err),
+				})
+				return diags
+			}
 		}
 
 		d.SetId(fmt.Sprintf("%v", vnet.ID))
@@ -947,12 +968,19 @@ func resourceOpennebulaVirtualNetworkRead(ctx context.Context, d *schema.Resourc
 			d.Set("reservation_ar_id", arID)
 			d.Set("reservation_size", vn.ARs[0].Size)
 			d.Set("reservation_first_ip", vn.ARs[0].IP)
+
+			if gw, _ := vn.Template.Get("GATEWAY"); vn.ARs[0].IP == gw {
+				d.Set("reservation_auto_gw", true)
+			} else {
+				d.Set("reservation_auto_gw", false)
+			}
 		}
 	} else {
 		d.Set("reservation_vnet", -1)
 		d.Set("reservation_ar_id", -1)
 		d.Set("reservation_size", 0)
 		d.Set("reservation_first_ip", "")
+		d.Set("reservation_auto_gw", false)
 	}
 
 	cfgClusterIDs := d.Get("cluster_ids").(*schema.Set).List()
